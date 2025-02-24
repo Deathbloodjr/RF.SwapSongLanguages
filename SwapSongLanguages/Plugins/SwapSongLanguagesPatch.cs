@@ -7,6 +7,9 @@ using System.Text;
 using System.Threading.Tasks;
 using static MusicDataInterface;
 using static DataConst;
+using SaveProfileManager.Plugins;
+using System.Text.Json.Nodes;
+using System.Text.Json;
 
 namespace SwapSongLanguages.Plugins
 {
@@ -73,28 +76,110 @@ namespace SwapSongLanguages.Plugins
             }
         }
 
-        public static void SetOverrideLanguages()
+        public static void InitializeOverrideLanguages(bool disabled = false)
         {
-            var songTitle = StringToLanguageType(Plugin.Instance.ConfigSongTitleLanguageOverride.Value);
-            if (songTitle != LanguageType.Num)
+            if (disabled)
             {
-                overrideSongTitle = true;
-                SongTitleOverride = songTitle;
+                overrideSongTitle = false;
+                overrideSongSubtitle = false;
+                overrideSongDetail = false;
+                return;
+            }
+            try
+            {
+                var saveDirectory = SaveDataManager.GetProfileSaveDirectory(Plugin.plugin);
+
+                var jsonPath = Path.Combine(saveDirectory, "config.json");
+                if (!File.Exists(jsonPath))
+                {
+                    CreateDefaultJson(jsonPath);
+                }
+
+                var node = JsonNode.Parse(File.ReadAllText(jsonPath));
+                // I'm probably gonna do this part without any error checks
+                // The try catch should catch any errors, and default to the plugin config file
+                var obj = node!["SongTitle"]!;
+                overrideSongTitle = obj["OverrideEnabled"]!.GetValue<bool>();
+                SongTitleOverride = StringToLanguageType(obj["Language"]!.GetValue<string>());
+
+                obj = node!["SongSubtitle"]!;
+                overrideSongSubtitle = obj["OverrideEnabled"]!.GetValue<bool>();
+                SongSubtitleOverride = StringToLanguageType(obj["Language"]!.GetValue<string>());
+
+                obj = node!["SongDetail"]!;
+                overrideSongDetail = obj["OverrideEnabled"]!.GetValue<bool>();
+                SongDetailOverride = StringToLanguageType(obj["Language"]!.GetValue<string>());
+            }
+            catch (Exception)
+            {
+                Logger.Log("SaveDataManager not found (probably)");
+                var songTitle = StringToLanguageType(Plugin.Instance.ConfigSongTitleLanguageOverride.Value);
+                if (songTitle != LanguageType.Num)
+                {
+                    overrideSongTitle = true;
+                    SongTitleOverride = songTitle;
+                }
+
+                var songSubtitle = StringToLanguageType(Plugin.Instance.ConfigSongSubtitleLanguageOverride.Value);
+                if (songSubtitle != LanguageType.Num)
+                {
+                    overrideSongSubtitle = true;
+                    SongSubtitleOverride = songSubtitle;
+                }
+
+                var songDetail = StringToLanguageType(Plugin.Instance.ConfigSongDetailLanguageOverride.Value);
+                if (songDetail != LanguageType.Num)
+                {
+                    overrideSongDetail = true;
+                    SongDetailOverride = songDetail;
+                }
+            }
+        }
+
+        private static void CreateDefaultJson(string jsonPath)
+        {
+            if (!Directory.Exists(Path.GetDirectoryName(jsonPath)))
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(jsonPath));
             }
 
-            var songSubtitle = StringToLanguageType(Plugin.Instance.ConfigSongSubtitleLanguageOverride.Value);
-            if (songSubtitle != LanguageType.Num)
+            JsonObject node = new JsonObject()
             {
-                overrideSongSubtitle = true;
-                SongSubtitleOverride = songSubtitle;
-            }
+                ["Options"] = new JsonArray()
+                {
+                    "JP",
+                    "EN",
+                    "FR",
+                    "IT",
+                    "DE",
+                    "ES",
+                    "TW",
+                    "CN",
+                    "KO",
+                },
+                ["SongTitle"] = new JsonObject()
+                {
+                    ["OverrideEnabled"] = true,
+                    ["Language"] = "JP",
+                },
+                ["SongSubtitle"] = new JsonObject()
+                {
+                    ["OverrideEnabled"] = true,
+                    ["Language"] = "JP",
+                },
+                ["SongDetail"] = new JsonObject()
+                {
+                    ["OverrideEnabled"] = true,
+                    ["Language"] = "EN",
+                }
+            };
 
-            var songDetail = StringToLanguageType(Plugin.Instance.ConfigSongDetailLanguageOverride.Value);
-            if (songDetail != LanguageType.Num)
+            JsonSerializerOptions options = new JsonSerializerOptions()
             {
-                overrideSongDetail = true;
-                SongDetailOverride = songDetail;
-            }
+                WriteIndented = true,
+            };
+
+            File.WriteAllText(jsonPath, node.ToJsonString(options));
         }
 
         /// <summary>

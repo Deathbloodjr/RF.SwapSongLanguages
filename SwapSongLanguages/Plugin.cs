@@ -7,6 +7,7 @@ using BepInEx.Configuration;
 using SwapSongLanguages.Plugins;
 using UnityEngine;
 using System.Collections;
+using SaveProfileManager.Plugins;
 
 namespace SwapSongLanguages
 {
@@ -19,6 +20,7 @@ namespace SwapSongLanguages
         private Harmony _harmony;
         public new static ManualLogSource Log;
 
+        public static PluginSaveDataInterface plugin;
 
         public ConfigEntry<bool> ConfigEnabled;
         public ConfigEntry<string> ConfigSongTitleLanguageOverride;
@@ -35,6 +37,8 @@ namespace SwapSongLanguages
 
             SetupConfig();
             SetupHarmony();
+
+            AddToSaveManager();
         }
 
         private void SetupConfig()
@@ -67,21 +71,27 @@ namespace SwapSongLanguages
             // Patch methods
             _harmony = new Harmony(MyPluginInfo.PLUGIN_GUID);
 
-            if (ConfigEnabled.Value)
+            LoadPlugin();
+        }
+
+
+        public static void LoadPlugin()
+        {
+            if (Instance.ConfigEnabled.Value)
             {
                 bool result = true;
-                result &= PatchFile(typeof(SwapSongLanguagesPatch));
+                // If any PatchFile fails, result will become false
+                result &= Instance.PatchFile(typeof(SwapSongLanguagesPatch));
                 if (result)
                 {
-                    SwapSongLanguagesPatch.SetOverrideLanguages();
+                    SwapSongLanguagesPatch.InitializeOverrideLanguages();
                     Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_NAME} is loaded!");
                 }
                 else
                 {
                     Log.LogError($"Plugin {MyPluginInfo.PLUGIN_GUID} failed to load.");
                     // Unload this instance of Harmony
-                    // I hope this works the way I think it does
-                    _harmony.UnpatchSelf();
+                    Instance._harmony.UnpatchSelf();
                 }
             }
             else
@@ -110,6 +120,30 @@ namespace SwapSongLanguages
                 Log.LogInfo(e.Message);
                 return false;
             }
+        }
+
+        public static void UnloadPlugin()
+        {
+            SwapSongLanguagesPatch.InitializeOverrideLanguages(true);
+            TaikoSingletonMonoBehaviour<CommonObjects>.Instance.MyDataManager.MusicData.Reload();
+            Instance._harmony.UnpatchSelf();
+            Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_NAME} has been unpatched.");
+        }
+
+        public static void ReloadPlugin()
+        {
+            SwapSongLanguagesPatch.InitializeOverrideLanguages();
+            TaikoSingletonMonoBehaviour<CommonObjects>.Instance.MyDataManager.MusicData.Reload();
+        }
+
+        public void AddToSaveManager()
+        {
+            plugin = new PluginSaveDataInterface(MyPluginInfo.PLUGIN_GUID);
+            plugin.AssignLoadFunction(LoadPlugin);
+            plugin.AssignUnloadFunction(UnloadPlugin);
+            plugin.AssignReloadSaveFunction(ReloadPlugin);
+            plugin.AddToManager();
+            //Logger.Log("Plugin added to SaveDataManager");
         }
 
         public static MonoBehaviour GetMonoBehaviour() => TaikoSingletonMonoBehaviour<CommonObjects>.Instance;
