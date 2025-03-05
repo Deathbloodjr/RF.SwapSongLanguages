@@ -8,6 +8,7 @@ using SwapSongLanguages.Plugins;
 using UnityEngine;
 using System.Collections;
 using SaveProfileManager.Plugins;
+using System.Reflection;
 
 namespace SwapSongLanguages
 {
@@ -19,8 +20,6 @@ namespace SwapSongLanguages
         public static Plugin Instance;
         private Harmony _harmony;
         public new static ManualLogSource Log;
-
-        public static PluginSaveDataInterface plugin;
 
         public ConfigEntry<bool> ConfigEnabled;
         public ConfigEntry<string> ConfigSongTitleLanguageOverride;
@@ -35,32 +34,36 @@ namespace SwapSongLanguages
 
             Log = base.Log;
 
-            SetupConfig();
+            SetupConfig(Config, Path.Combine("BepInEx", "data", ModName));
             SetupHarmony();
 
-            AddToSaveManager();
+            var isSaveManagerLoaded = IsSaveManagerLoaded();
+            if (isSaveManagerLoaded)
+            {
+                AddToSaveManager();
+            }
         }
 
-        private void SetupConfig()
+        private void SetupConfig(ConfigFile config, string saveFolder)
         {
-            var dataFolder = Path.Combine("BepInEx", "data", ModName);
+            string dataFolder = Path.Combine("BepInEx", "data", ModName);
 
-            ConfigEnabled = Config.Bind("General",
+            ConfigEnabled = config.Bind("General",
                 "Enabled",
                 true,
                 "Enables the mod.");
 
-            ConfigSongTitleLanguageOverride = Config.Bind("General",
+            ConfigSongTitleLanguageOverride = config.Bind("General",
                 "SongTitleLanguageOverride",
                 "JP",
                 "Sets the song title to the selected language. (JP, EN, FR, IT, DE, ES, TW, CN, KO)");
 
-            ConfigSongSubtitleLanguageOverride = Config.Bind("General",
+            ConfigSongSubtitleLanguageOverride = config.Bind("General",
                 "SongSubtitleLanguageOverride",
                 "JP",
                 "Sets the song subtitle to the selected language. (JP, EN, FR, IT, DE, ES, TW, CN, KO)");
 
-            ConfigSongDetailLanguageOverride = Config.Bind("General",
+            ConfigSongDetailLanguageOverride = config.Bind("General",
                 "SongDetailLanguageOverride",
                 "EN",
                 "Sets the song detail (above the song title) to the selected language. (JP, EN, FR, IT, DE, ES, TW, CN, KO)");
@@ -85,18 +88,19 @@ namespace SwapSongLanguages
                 if (result)
                 {
                     SwapSongLanguagesPatch.InitializeOverrideLanguages();
-                    Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_NAME} is loaded!");
+                    Logger.Log($"Plugin {MyPluginInfo.PLUGIN_NAME} is loaded!");
                 }
                 else
                 {
-                    Log.LogError($"Plugin {MyPluginInfo.PLUGIN_GUID} failed to load.");
+                    Logger.Log($"Plugin {MyPluginInfo.PLUGIN_GUID} failed to load.", LogType.Error);
                     // Unload this instance of Harmony
                     Instance._harmony.UnpatchSelf();
                 }
             }
             else
             {
-                Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_NAME} is disabled.");
+                UnloadPlugin();
+                Logger.Log($"Plugin {MyPluginInfo.PLUGIN_NAME} is disabled.");
             }
         }
 
@@ -109,15 +113,13 @@ namespace SwapSongLanguages
             try
             {
                 _harmony.PatchAll(type);
-#if DEBUG
-                Log.LogInfo("File patched: " + type.FullName);
-#endif
+                Logger.Log("File patched: " + type.FullName, LogType.Debug);
                 return true;
             }
             catch (Exception e)
             {
-                Log.LogInfo("Failed to patch file: " + type.FullName);
-                Log.LogInfo(e.Message);
+                Logger.Log("Failed to patch file: " + type.FullName);
+                Logger.Log(e.Message);
                 return false;
             }
         }
@@ -127,7 +129,7 @@ namespace SwapSongLanguages
             SwapSongLanguagesPatch.InitializeOverrideLanguages(true);
             TaikoSingletonMonoBehaviour<CommonObjects>.Instance.MyDataManager.MusicData.Reload();
             Instance._harmony.UnpatchSelf();
-            Log.LogInfo($"Plugin {MyPluginInfo.PLUGIN_NAME} has been unpatched.");
+            Logger.Log($"Plugin {MyPluginInfo.PLUGIN_NAME} has been unpatched.");
         }
 
         public static void ReloadPlugin()
@@ -138,12 +140,26 @@ namespace SwapSongLanguages
 
         public void AddToSaveManager()
         {
-            plugin = new PluginSaveDataInterface(MyPluginInfo.PLUGIN_GUID);
+            var plugin = new PluginSaveDataInterface(MyPluginInfo.PLUGIN_GUID);
             plugin.AssignLoadFunction(LoadPlugin);
             plugin.AssignUnloadFunction(UnloadPlugin);
             plugin.AssignReloadSaveFunction(ReloadPlugin);
+            plugin.AssignConfigSetupFunction(SetupConfig);
             plugin.AddToManager();
-            //Logger.Log("Plugin added to SaveDataManager");
+            Logger.Log("Plugin added to SaveDataManager");
+        }
+
+        private bool IsSaveManagerLoaded()
+        {
+            try
+            {
+                Assembly loadedAssembly = Assembly.Load("com.DB.RF.SaveProfileManager");
+                return loadedAssembly != null;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         public static MonoBehaviour GetMonoBehaviour() => TaikoSingletonMonoBehaviour<CommonObjects>.Instance;
