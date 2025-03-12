@@ -5,7 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <ModName>SwapSongLanguages</ModName>
-    <ModVersion>1.0.0</ModVersion>
+    <ModVersion>1.0.1</ModVersion>
     <Description>A Rhythm Festival mod to swap the languages of the titles and subtitles of songs.</Description>
   </PropertyGroup>
   
