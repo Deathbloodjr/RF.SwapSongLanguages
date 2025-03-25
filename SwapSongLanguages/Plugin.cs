@@ -91,6 +91,7 @@ namespace SwapSongLanguages
                 if (result)
                 {
                     SwapSongLanguagesPatch.InitializeOverrideLanguages();
+                    TaikoSingletonMonoBehaviour<CommonObjects>.Instance.MyDataManager.MusicData.Reload();
                     Logger.Log($"Plugin {MyPluginInfo.PLUGIN_NAME} is loaded!");
                 }
                 else
@@ -148,8 +149,7 @@ namespace SwapSongLanguages
             plugin.AssignUnloadFunction(UnloadPlugin);
             plugin.AssignReloadSaveFunction(ReloadPlugin);
             plugin.AssignConfigSetupFunction(SetupConfig);
-            plugin.AddToManager();
-            Logger.Log("Plugin added to SaveDataManager");
+            plugin.AddToManager(ConfigEnabled.Value);
         }
 
         private bool IsSaveManagerLoaded()
